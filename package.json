@@ -1,0 +1,20 @@
+{
+  "name": "nutriboost-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.5.3",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.3",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.55.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
