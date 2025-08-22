@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: NutriBoost Shop API
+  version: "1.1.0"
+  description: |
+    API para la tienda en línea de suplementos nutricionales **NutriBoost Shop**, desarrollada con **Extreme Programming (XP)**.
+
+    ### Novedades
+    - CRUD completo para **Productos**
+    - CRUD completo para **Órdenes**
+    - Seguridad con cookies HTTP-only y token CSRF
+  contact:
+    name: Equipo NutriDev
+    email: support@nutriboost.com
+
+servers:
+  - url: http://localhost:5000
+    description: Servidor de desarrollo
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+    xsrfToken:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+
+  schemas:
+    Product:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        nombre:
+          type: string
+          example: "Proteína Vegana"
+        precio:
+          type: number
+          example: 30.0
+        descripcion:
+          type: string
+          example: "Proteína vegana para recuperación muscular"
+        imagen:
+          type: string
+          example: "https://cdn.nutriboost.com/products/proteina-vegana.jpg"
+        categoria:
+          type: string
+          example: "Proteínas"
+
+    Order:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439012"
+        detalles:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: string
+                example: "507f1f77bcf86cd799439011"
+              cantidad:
+                type: number
+                example: 2
+              subtotal:
+                type: number
+                example: 60.0
+        total:
+          type: number
+          example: 75.0
+        fecha:
+          type: string
+          format: date-time
+          example: "2025-08-21T10:52:00Z"
+
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        message:
+          type: string
+          example: "invalid csrf token"
+
+security:
+  - cookieAuth: []
+  - xsrfToken: []
+
+paths:
+  /products:
+    get:
+      summary: Obtener catálogo de productos
+      tags: [Products]
+      responses:
+        "200":
+          description: Lista de productos
+          content:
+            application/json:
+              example:
+                - _id: "507f1f77bcf86cd799439011"
+                  nombre: "Proteína Vegana"
+                  precio: 30.0
+                  descripcion: "Proteína vegana para recuperación muscular"
+                  imagen: "https://cdn.nutriboost.com/products/proteina-vegana.jpg"
+                  categoria: "Proteínas"
+
+    post:
+      summary: Crear un producto
+      tags: [Products]
+      security:
+        - cookieAuth: []
+          xsrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              nombre: "BCAA en Polvo"
+              precio: 20.5
+              descripcion: "Aminoácidos esenciales para la recuperación"
+              imagen: "https://cdn.nutriboost.com/products/bcaa.jpg"
+              categoria: "Aminoácidos"
+      responses:
+        "201":
+          description: Producto creado
+          content:
+            application/json:
+              example:
+                _id: "507f1f77bcf86cd799439015"
+                nombre: "BCAA en Polvo"
+                precio: 20.5
+                descripcion: "Aminoácidos esenciales para la recuperación"
+                imagen: "https://cdn.nutriboost.com/products/bcaa.jpg"
+                categoria: "Aminoácidos"
+
+  /products/{id}:
+    put:
+      summary: Actualizar producto
+      tags: [Products]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: "507f1f77bcf86cd799439015"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              nombre: "BCAA en Polvo Sabor Naranja"
+              precio: 22.0
+              descripcion: "Aminoácidos esenciales sabor naranja"
+              imagen: "https://cdn.nutriboost.com/products/bcaa-orange.jpg"
+              categoria: "Aminoácidos"
+      responses:
+        "200":
+          description: Producto actualizado
+          content:
+            application/json:
+              example:
+                _id: "507f1f77bcf86cd799439015"
+                nombre: "BCAA en Polvo Sabor Naranja"
+                precio: 22.0
+                descripcion: "Aminoácidos esenciales sabor naranja"
+                imagen: "https://cdn.nutriboost.com/products/bcaa-orange.jpg"
+                categoria: "Aminoácidos"
+
+    delete:
+      summary: Eliminar producto
+      tags: [Products]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: "507f1f77bcf86cd799439015"
+      responses:
+        "200":
+          description: Producto eliminado
+          content:
+            application/json:
+              example:
+                status: "success"
+                message: "Producto eliminado correctamente"
+
+  /orders:
+    get:
+      summary: Obtener órdenes
+      tags: [Orders]
+      responses:
+        "200":
+          description: Lista de órdenes
+          content:
+            application/json:
+              example:
+                - _id: "507f1f77bcf86cd799439012"
+                  detalles:
+                    - productId: "507f1f77bcf86cd799439011"
+                      cantidad: 2
+                      subtotal: 60.0
+                  total: 75.0
+                  fecha: "2025-08-21T10:52:00Z"
+
+    post:
+      summary: Crear orden
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              detalles:
+                - productId: "507f1f77bcf86cd799439011"
+                  cantidad: 2
+                  subtotal: 60.0
+              total: 75.0
+      responses:
+        "201":
+          description: Orden creada
+          content:
+            application/json:
+              example:
+                _id: "507f1f77bcf86cd799439012"
+                detalles:
+                  - productId: "507f1f77bcf86cd799439011"
+                    cantidad: 2
+                    subtotal: 60.0
+                total: 75.0
+                fecha: "2025-08-21T10:52:00Z"
+
+  /orders/{id}:
+    put:
+      summary: Actualizar orden
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: "507f1f77bcf86cd799439012"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              detalles:
+                - productId: "507f1f77bcf86cd799439011"
+                  cantidad: 3
+                  subtotal: 90.0
+              total: 105.0
+      responses:
+        "200":
+          description: Orden actualizada
+          content:
+            application/json:
+              example:
+                _id: "507f1f77bcf86cd799439012"
+                detalles:
+                  - productId: "507f1f77bcf86cd799439011"
+                    cantidad: 3
+                    subtotal: 90.0
+                total: 105.0
+                fecha: "2025-08-21T10:52:00Z"
+
+    delete:
+      summary: Eliminar orden
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          example: "507f1f77bcf86cd799439012"
+      responses:
+        "200":
+          description: Orden eliminada
+          content:
+            application/json:
+              example:
+                status: "success"
+                message: "Orden eliminada correctamente"
