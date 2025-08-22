@@ -22,4 +22,4 @@ Para correr el api se utiliza
   - npm start
 
 Para acceder a la Documentacion de Swagger utilizar el siguiente link:
-http://localhost/5000/docs
+http://localhost:5000/docs/
