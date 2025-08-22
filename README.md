@@ -20,3 +20,6 @@ OPENAI_MODEL=gpt-4o-mini
 Para correr el api se utiliza
 
   - npm start
+
+Para acceder a la Documentacion de Swagger utilizar el siguiente link:
+http://localhost/5000/docs
