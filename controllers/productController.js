@@ -1,6 +1,7 @@
 const Product = require("../models/Product");
 const aiService = require("../services/aiService");
 const { z, ZodError } = require("zod");
+const fs = require("fs").promises; // Importa el módulo fs para manejar archivos
 
 // Acepta URL http(s) o ruta relativa que empiece con "/"
 const imageValidator = z.string().refine(
@@ -71,23 +72,49 @@ async function getProducts(req, res, next) {
 
 async function createProduct(req, res, next) {
   try {
-    const data = createSchema.parse(req.body);
+    const { nombre, precio, categoria, descripcion, stock } = req.body;
+    let data;
 
-    let descripcion = data.descripcion;
-    if (!descripcion) {
+    // Si se sube un archivo, usa la ruta del archivo.
+    if (req.file) {
+      const imageUrl = `/uploads/${req.file.filename}`;
+      // Usar Zod con los datos correctos
+      data = createSchema.parse({
+        nombre,
+        precio,
+        categoria,
+        descripcion,
+        stock,
+        imagen: imageUrl,
+      });
+    } else {
+      // Si no hay archivo subido, usa los datos del body como antes.
+      data = createSchema.parse(req.body);
+    }
+
+    let productDescription = data.descripcion;
+    if (!productDescription) {
       try {
-        descripcion = await aiService.generateDescription(
+        productDescription = await aiService.generateDescription(
           data.nombre,
           data.categoria
         );
-      } catch {
-        descripcion = `Suplemento ${data.nombre} de la categoría ${data.categoria}.`;
+      } catch (err) {
+        console.error("Error al generar la descripción con IA:", err.message);
+        productDescription = `Suplemento ${data.nombre} de la categoría ${data.categoria}.`;
       }
     }
 
-    const product = await Product.create({ ...data, descripcion });
+    const product = await Product.create({
+      ...data,
+      descripcion: productDescription,
+    });
     res.status(201).json(product);
   } catch (err) {
+    // Si hay un error, elimina el archivo subido para evitar basura
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(console.error);
+    }
     if (err instanceof ZodError) {
       return res.status(400).json({
         status: "error",

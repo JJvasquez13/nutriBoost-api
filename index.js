@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
 const cors = require("cors");
+const path = require("path");
 
 const connectDB = require("./config/db");
 const config = require("./config/config");
@@ -31,6 +32,7 @@ app.use(cookieParser());
 connectDB();
 
 // Rutas
+app.use(express.static(path.join(__dirname, "public")));
 app.use("/products", productRoutes);
 app.use("/orders", orderRoutes);
 app.use("/ai", aiRoutes);

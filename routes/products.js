@@ -1,19 +1,18 @@
+// routes/products.js
 const express = require("express");
-const {
-  getProducts,
-  createProduct,
-  getProductById,
-  updateProduct,
-  deleteProduct,
-} = require("../controllers/productController");
-const auth = require("../middleware/authMiddleware");
-const csrfMiddleware = require("../middleware/authMiddleware");
 const router = express.Router();
+const productController = require("../controllers/productController"); // Importa el controlador
+const upload = require("../middleware/uploader"); // Importa el middleware de subida
 
-router.get("/", getProducts);
-router.get("/:id", getProductById);
-router.post("/", auth, createProduct);
-router.put("/:id", csrfMiddleware, updateProduct);
-router.delete("/:id", csrfMiddleware, deleteProduct);
+// Obtener todos los productos
+router.get("/", productController.getProducts);
+// Crear un nuevo producto (con subida de imagen)
+router.post("/", upload.single("imagen"), productController.createProduct);
+// Obtener un producto por ID
+router.get("/:id", productController.getProductById);
+// Actualizar un producto por ID
+router.put("/:id", productController.updateProduct);
+// Eliminar un producto por ID
+router.delete("/:id", productController.deleteProduct);
 
 module.exports = router;
