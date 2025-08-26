@@ -14,7 +14,7 @@ const swaggerUi = require("swagger-ui-express");
 // Módulos locales
 const connectDB = require("./config/db");
 const config = require("./config/config");
-const logger =require("./utils/logger");
+const logger = require("./utils/logger");
 const productRoutes = require("./routes/products");
 const orderRoutes = require("./routes/orders");
 const aiRoutes = require("./routes/ai");
@@ -71,13 +71,13 @@ app.use((req, res, next) => {
 // Error general del servidor (500)
 app.use((err, req, res, next) => {
   logger.error(`Error no manejado: ${err.stack || err.message}`);
-  res.status(500).json({ status: "error", message: "Error interno del servidor" });
+  res
+    .status(500)
+    .json({ status: "error", message: "Error interno del servidor" });
 });
 
 // --- Inicio del Servidor ---
 app.listen(config.port, () => {
-  logger.info(
-    `🚀 API escuchando en el puerto ${config.port}`
-  );
-  logger.info(`📚 Docs en http://localhost:${config.port}/docs`);
+  logger.info(`API escuchando en el puerto ${config.port}`);
+  logger.info(`Docs en http://localhost:${config.port}/docs`);
 });
