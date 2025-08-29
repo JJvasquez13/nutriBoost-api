@@ -1,23 +1,29 @@
-// index.js
 
-// --- Importaciones ---
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+const { rateLimit } = require("express-rate-limit");
 const compression = require("compression");
 const cors = require("cors");
 const path = require("path");
 const YAML = require("yamljs");
 const swaggerUi = require("swagger-ui-express");
 
-// Módulos locales
 const connectDB = require("./config/db");
 const config = require("./config/config");
 const logger = require("./utils/logger");
-const productRoutes = require("./routes/products");
-const orderRoutes = require("./routes/orders");
-const aiRoutes = require("./routes/ai");
+
+function pickRouter(mod) {
+  if (!mod) return mod;
+  if (mod.router) return mod.router;
+  if (mod.default) return mod.default;
+  return mod;
+}
+
+// Importa rutas y normaliza
+const productRoutes = pickRouter(require("./routes/products"));
+const orderRoutes = pickRouter(require("./routes/orders"));
+const aiRoutes = pickRouter(require("./routes/ai"));
 
 // --- Inicialización ---
 const app = express();
@@ -34,7 +40,7 @@ app.use(cors({ origin: true, credentials: true }));
 // Rate Limiter
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 100000,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -52,8 +58,9 @@ connectDB();
 // Servidor de archivos estáticos
 app.use(express.static(path.join(__dirname, "public")));
 
-// Documentación de la API
-const swaggerDocument = YAML.load("./swagger.yaml");
+// Documentación de la API (usa ruta absoluta para evitar errores)
+const swaggerPath = path.join(__dirname, "swagger.yaml");
+const swaggerDocument = YAML.load(swaggerPath);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Rutas de la aplicación
@@ -64,7 +71,7 @@ app.use("/ai", aiRoutes);
 // --- Manejo de Errores ---
 
 // Ruta no encontrada (404)
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).json({ status: "error", message: "Ruta no encontrada" });
 });
 

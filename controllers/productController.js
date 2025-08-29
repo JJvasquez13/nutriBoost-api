@@ -1,7 +1,7 @@
 const Product = require("../models/Product");
 const aiService = require("../services/aiService");
 const { z, ZodError } = require("zod");
-const fs = require("fs").promises; // Importa el módulo fs para manejar archivos
+const fs = require("fs").promises;
 
 // Acepta URL http(s) o ruta relativa que empiece con "/"
 const imageValidator = z.string().refine(
@@ -29,7 +29,7 @@ const listSchema = z.object({
   q: z.string().optional(),
   categoria: z.string().optional(),
   sort: z.enum(["new", "price_asc", "price_desc"]).default("new"),
-  includeInactive: z.coerce.boolean().optional(), // nuevo
+  includeInactive: z.coerce.boolean().optional(),
 });
 
 async function getProducts(req, res, next) {
@@ -37,7 +37,6 @@ async function getProducts(req, res, next) {
     const { page, limit, q, categoria, sort, includeInactive } =
       listSchema.parse(req.query);
 
-    // Por defecto incluimos docs sin 'activo' (históricos). Si includeInactive=true, ignoramos filtro.
     let filter = {};
     if (!includeInactive) {
       filter = { $or: [{ activo: true }, { activo: { $exists: false } }] };
@@ -75,10 +74,8 @@ async function createProduct(req, res, next) {
     const { nombre, precio, categoria, descripcion, stock } = req.body;
     let data;
 
-    // Si se sube un archivo, usa la ruta del archivo.
     if (req.file) {
       const imageUrl = `/uploads/${req.file.filename}`;
-      // Usar Zod con los datos correctos
       data = createSchema.parse({
         nombre,
         precio,
@@ -88,7 +85,6 @@ async function createProduct(req, res, next) {
         imagen: imageUrl,
       });
     } else {
-      // Si no hay archivo subido, usa los datos del body como antes.
       data = createSchema.parse(req.body);
     }
 
@@ -111,7 +107,6 @@ async function createProduct(req, res, next) {
     });
     res.status(201).json(product);
   } catch (err) {
-    // Si hay un error, elimina el archivo subido para evitar basura
     if (req.file) {
       await fs.unlink(req.file.path).catch(console.error);
     }
@@ -129,6 +124,18 @@ async function createProduct(req, res, next) {
 async function getProductById(req, res, next) {
   try {
     const product = await Product.findById(req.params.id);
+    if (!product)
+      return res.status(404).json({ message: "Producto no encontrado" });
+    res.json(product);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Nuevo: obtener producto por slug
+async function getProductBySlug(req, res, next) {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug });
     if (!product)
       return res.status(404).json({ message: "Producto no encontrado" });
     res.json(product);
@@ -156,7 +163,6 @@ const updateProduct = async (req, res) => {
   }
 };
 
-// 📌 Eliminar producto
 const deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
@@ -181,6 +187,7 @@ module.exports = {
   getProducts,
   createProduct,
   getProductById,
+  getProductBySlug,
   updateProduct,
   deleteProduct,
 };

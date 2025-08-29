@@ -1,4 +1,3 @@
-// models/Product.js
 const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema(
@@ -19,7 +18,15 @@ const productSchema = new mongoose.Schema(
     categoria: {
       type: String,
       required: true,
-      enum: ["Proteína", "Aminoácidos", "Vitaminas", "Pre-entreno", "Otros"],
+      enum: [
+        "Proteína",
+        "Aminoácidos",
+        "Vitaminas",
+        "Pre-entreno",
+        "Snacks",
+        "Salud y Bienestar",
+        "Otros"
+      ],
       index: true,
     },
     stock: { type: Number, default: 0, min: 0 },

@@ -1,141 +1,152 @@
 const OpenAI = require("openai");
-const config = require("../config/config");
-const logger = require("../utils/logger");
+const Product = require("../models/Product");
 
-if (!config.openaiApiKey) {
-  throw new Error("Falta OPENAI_API_KEY en variables de entorno");
-}
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const openai = new OpenAI({
-  apiKey: config.openaiApiKey,
-  baseURL: config.openaiBaseUrl, // opcional
-  timeout: 20_000,
-});
-
-async function withRetry(fn, { retries = 2, delayMs = 600 } = {}) {
-  let lastErr;
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      const status = err?.status || err?.response?.status;
-      // Reintentar en 429/5xx/timeouts
-      if (
-        i < retries &&
-        (status === 429 ||
-          (status >= 500 && status < 600) ||
-          err.code === "ETIMEDOUT")
-      ) {
-        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
-        continue;
-      }
-      break;
-    }
-  }
-  throw lastErr;
-}
-
-// --- Descripción corta, max ~100 palabras
 async function generateDescription(nombre, categoria) {
-  const prompt = [
-    {
-      role: "system",
-      content:
-        "Eres copywriter de suplementos. Redacta descripciones precisas, atractivas y responsables (sin claims médicos). Máx. 100 palabras.",
-    },
-    {
-      role: "user",
-      content: `Producto: "${nombre}"\nCategoría: "${categoria}"\nIncluye beneficios, ingredientes clave si son comunes, y cómo usarlo. Tono profesional y claro.`,
-    },
-  ];
+  const prompt = `
+Escribe una breve descripción atractiva (máx 60 palabras) para un producto de ecommerce fitness.
+Nombre: "${nombre}". Categoría: "${categoria}".
+Devuelve SOLO el texto sin comillas ni markdown.
+  `.trim();
 
-  const res = await withRetry(() =>
-    openai.chat.completions.create({
-      model: config.openaiModel,
-      messages: prompt,
-      max_tokens: 180,
-      temperature: 0.7,
-    })
-  );
-
-  const txt = res.choices?.[0]?.message?.content?.trim();
-  if (!txt) throw new Error("Respuesta vacía de OpenAI");
-  logger.info({ msg: "Descripción generada", nombre });
-  return txt;
-}
-
-// --- Recomendaciones en JSON seguro
-async function getRecommendations(productName) {
-  const prompt = [
-    {
-      role: "system",
-      content:
-        'Devuelve exclusivamente un JSON con el esquema {"items":[{"name":string}...]}. No escribas texto adicional.',
-    },
-    {
-      role: "user",
-      content: `Recomienda 3 suplementos similares a "${productName}" vendidos en tiendas fitness. Solo nombres genéricos (sin marcas) y evita claims no verificados.`,
-    },
-  ];
-
-  const res = await withRetry(() =>
-    openai.chat.completions.create({
-      model: config.openaiModel,
-      messages: prompt,
-      max_tokens: 150,
-      temperature: 0.4,
-      response_format: { type: "json_object" }, // fuerza JSON
-    })
-  );
-
-  const raw = res.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("Respuesta vacía de OpenAI");
-  let json;
   try {
-    json = JSON.parse(raw);
-  } catch {
-    throw new Error("JSON inválido en recomendaciones");
+    const r = await openai.responses.create({
+      model: MODEL,
+      input: prompt,
+    });
+    return r.output_text?.trim() || "";
+  } catch (error) {
+    throw new Error("No se pudo generar la descripción con IA.");
   }
-  const list = Array.isArray(json.items)
-    ? json.items.map((i) => i.name).filter(Boolean)
-    : [];
-  if (list.length === 0) throw new Error("Recomendaciones vacías");
-  logger.info({ msg: "Recomendaciones generadas", productName, list });
-  return list;
 }
 
-// --- Validación/edición (clara y corta)
 async function validateDescription(description) {
-  const prompt = [
-    {
-      role: "system",
-      content:
-        "Edita el texto para claridad, precisión y cumplimiento (sin promesas médicas). Mantén ≤100 palabras.",
-    },
-    {
-      role: "user",
-      content: `Texto:\n"""${description}"""`,
-    },
-  ];
+  const prompt = `
+Valida la siguiente descripción de producto. Devuelve JSON {ok:boolean, msg:string}
+Reglas:
+- 30-80 palabras
+- Sin promesas médicas
+- Tono motivacional
+Texto: """${description || ""}"""
+  `.trim();
 
-  const res = await withRetry(() =>
-    openai.chat.completions.create({
-      model: config.openaiModel,
-      messages: prompt,
-      max_tokens: 180,
-      temperature: 0.3,
-    })
-  );
+  try {
+    const r = await openai.responses.create({
+      model: MODEL,
+      response_format: { type: "json_object" },
+      input: prompt,
+    });
 
-  const txt = res.choices?.[0]?.message?.content?.trim();
-  if (!txt) throw new Error("Respuesta vacía de OpenAI");
-  logger.info({ msg: "Descripción validada" });
-  return txt;
+    let out = { ok: false, msg: "Formato inválido" };
+    try {
+      out = JSON.parse(r.output_text || "{}");
+    } catch {}
+    return out;
+  } catch (error) {
+    throw new Error("No se pudo validar la descripción con IA.");
+  }
+}
+
+async function getRecommendations({ slug, productId, productName, limit = 4 }) {
+  // 1) Producto actual
+  let current;
+  if (productId) current = await Product.findById(productId).lean();
+  else if (slug) current = await Product.findOne({ slug }).lean();
+  else if (productName) current = await Product.findOne({ nombre: productName }).lean();
+
+  if (!current) throw new Error("Producto no encontrado");
+
+  // 2) Catálogo candidato
+  const catalog = await Product.find({
+    activo: true,
+    stock: { $gt: 0 },
+    _id: { $ne: current._id },
+  })
+    .select("_id slug nombre categoria precio descripcion imagen stock")
+    .limit(60)
+    .lean();
+
+  // Si no hay productos recomendables, retorna vacío
+  if (!catalog.length) return [];
+
+  // 3) Prompt con reglas y salida JSON estricta
+  const system = `
+Eres un recomendador para un e-commerce de suplementos.
+Responde SOLO un JSON: {"slugs": ["slug1","slug2",...]} (máx ${limit}).
+Criterios:
+1) Prioriza misma categoría que el producto actual.
+2) Luego, complementarios (Pre-Entreno ↔ Intra-Entreno ↔ Snacks; Salud y Bienestar puede complementar a todos).
+3) No repitas el producto actual. No inventes slugs.
+  `.trim();
+
+  const user = {
+    current: {
+      slug: current.slug,
+      nombre: current.nombre,
+      categoria: current.categoria,
+      descripcion: current.descripcion || "",
+      precio: current.precio,
+    },
+    catalog: catalog.map((p) => ({
+      slug: p.slug,
+      nombre: p.nombre,
+      categoria: p.categoria,
+      descripcion: (p.descripcion || "").slice(0, 300),
+      precio: p.precio,
+    })),
+  };
+
+  let slugs = [];
+  try {
+    const r = await openai.responses.create({
+      model: MODEL,
+      response_format: { type: "json_object" },
+      input: [
+        { role: "system", content: system },
+        {
+          role: "user",
+          content:
+            "Devuelve slugs recomendados SOLO como {\"slugs\":[...]}\n" +
+            JSON.stringify(user),
+        },
+      ],
+    });
+
+    // 4) Parseo y fallback
+    try {
+      const parsed = JSON.parse(r.output_text || "{}");
+      slugs = Array.isArray(parsed.slugs) ? parsed.slugs.slice(0, limit) : [];
+    } catch {
+      slugs = [];
+    }
+  } catch (error) {
+    // Si OpenAI falla, usa fallback
+    slugs = [];
+  }
+
+  if (!slugs.length) {
+    // Fallback: misma categoría por orden natural
+    slugs = catalog
+      .filter((p) => p.categoria === current.categoria)
+      .slice(0, limit)
+      .map((p) => p.slug);
+  }
+
+  // 5) Traer productos en el orden propuesto
+  const items = await Product.find({ slug: { $in: slugs } })
+    .select("_id slug nombre precio imagen categoria stock")
+    .lean();
+
+  const bySlug = new Map(items.map((p) => [p.slug, p]));
+  const ordered = slugs.map((s) => bySlug.get(s)).filter(Boolean);
+
+  return ordered;
 }
 
 module.exports = {
   generateDescription,
-  getRecommendations,
   validateDescription,
+  getRecommendations,
 };
